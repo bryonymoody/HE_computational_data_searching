@@ -1,19 +1,3 @@
-options(knitr.duplicate.label = 'allow')
-options(kableExtra.latex.load_packages = FALSE)
-
-library(knitr)
-hook_output = knit_hooks$get('output')
-knit_hooks$set(output = function(x, options) {
-  # this hook is used only when the linewidth option is not NULL
-  if (!is.null(n <- options$linewidth)) {
-    x = knitr:::split_lines(x)
-    # any lines wider than n should be wrapped
-    if (any(nchar(x) > n)) x = strwrap(x, width = n)
-    x = paste(x, collapse = '\n')
-  }
-  hook_output(x, options)
-})
-
 #loads all libraries needed
 library(reshape)
 library(ggplot2)
@@ -59,6 +43,26 @@ ggplot(df, aes(x = df$X1, y = value, fill = X2 ,label = paste0(value))) + xlab("
 
 
 ############################start of OASIS methodology code############################################################
+####### Bash script for keyword searching documents ########
+#grep searches for keywords
+# -n given line numbers
+# -i ignores case
+# "date" here is our keyword
+# * means it searches all documents in the current directory
+"cut -d : -f 1" takes the documents that contain the keyword and sends it to date_name.txt
+# google grep man or cut man for more information
+grep -n -i date * | cut -d : -f 1 > /home/bryony/Documents/Data\ Review/date_name.txt
+
+
+##### Bash script for extracting introduction#####
+#sed extracts everything in a document that lies between Abstract and a blank line
+#the results are then sent to abstracts.txt using ">"
+#replacing abstraxt with introduction will extract the introduction too
+#sed is case sensitive so it is multiple formats of a word, i.e ABSTRACT will need to be used if not consistently formated
+
+sed -n "/^Abstract$/,/^$/p" * > /home/bryony/Documents/Data\ Review/abstracts.txt
+
+#importing lists of files containing each keyword
 strat <- read.table("~/Documents/Data Review/Keyword searches/stratigraph.txt", quote="\"", comment.char="")
 date <- read.table("~/Documents/Data Review/Keyword searches/date.txt", quote="\"", comment.char="")
 phase <- read.table("~/Documents/Data Review/Keyword searches/phase.txt", quote="\"", comment.char="")
@@ -588,109 +592,76 @@ grid.arrange(g1, g2, g3 ,g4, g5, g6, nrow = 3)
 
 grid.arrange(p1, p2, p3 ,p4, p5, p6, nrow = 3) 
 
-## #function to find the words for each topic such that the relevance to the topic "beta" sums to approx is 0.1 for per 2000 data from CAA
-## relbeta <- function(i){
-## beta1 <- ap_topics[ap_topics$topic==i,]
-## beta1 <- beta1[order(-beta1$beta),]
-## beta1[,4] <- cumsum(beta1$beta)
-## beta1l <- beta1[beta1$V4 < 0.1,]
-## return(beta1l)
-## }
-## beta1 <- relbeta(1)
-## beta2 <- relbeta(2)
-## beta3 <- relbeta(3)
-## beta4 <- relbeta(4)
-## beta5 <- relbeta(5)
-## beta6 <- relbeta(6)
-## 
-## set.seed(1234) #ensures you get the same wordcloud each time.
-## par(mfrow = c(2, 3), mar=rep(0,4)) #arranges wordclouds in a 2x3grid
-## wordcloud(words = beta1$term, freq = beta1$beta,
-##           colors=brewer.pal(8, "Dark2"))
-## wordcloud(words = beta2$term, freq = beta2$beta, min.freq = 0,
-##           max.words=200, random.order=FALSE, rot.per=0.35,
-##           colors=brewer.pal(8, "Dark2"))
-## wordcloud(words = beta3$term, freq = beta3$beta, min.freq = 0,
-##           max.words=200, random.order=FALSE, rot.per=0.35,
-##           colors=brewer.pal(8, "Dark2"))
-## wordcloud(words = beta4$term, freq = beta4$beta, min.freq = 0,
-##           max.words=200, random.order=FALSE, rot.per=0.35,
-##           colors=brewer.pal(8, "Dark2"))
-## wordcloud(words = beta5$term, freq = beta5$beta, min.freq = 0,
-##           max.words=200, random.order=FALSE, rot.per=0.35,
-##           colors=brewer.pal(8, "Dark2"))
-## wordcloud(words = beta6$term, freq = beta6$beta, min.freq = 0,
-##           max.words=200, random.order=FALSE, rot.per=0.35,
-##           colors=brewer.pal(8, "Dark2"))
-## 
-## 
-## #function to find the words for each topic such that the relevance to the topic "beta" sums to approx is 0.1 for CAA data
-## relbeta <- function(i){
-## beta1 <- ap_topics6[ap_topics6$topic==i,]
-## beta1 <- beta1[order(-beta1$beta),]
-## beta1[,4] <- cumsum(beta1$beta)
-## beta1l <- beta1[beta1$V4 < 0.1,]
-## return(beta1l)
-## }
-## 
-## beta1 <- relbeta(1)
-## beta2 <- relbeta(2)
-## beta3 <- relbeta(3)
-## beta4 <- relbeta(4)
-## beta5 <- relbeta(5)
-## beta6 <- relbeta(6)
-## 
-## par(mfrow = c(2, 3), mar=rep(0,4))
-## wordcloud(words = beta1$term, freq = beta1$beta,
-##           colors=brewer.pal(8, "Dark2"))
-## wordcloud(words = beta2$term, freq = beta2$beta, min.freq = 0,
-##           max.words=200, random.order=FALSE, rot.per=0.35,
-##           colors=brewer.pal(8, "Dark2"))
-## wordcloud(words = beta3$term, freq = beta3$beta, min.freq = 0,
-##           max.words=200, random.order=FALSE, rot.per=0.35,
-##           colors=brewer.pal(8, "Dark2"))
-## wordcloud(words = beta4$term, freq = beta4$beta, min.freq = 0,
-##           max.words=200, random.order=FALSE, rot.per=0.35,
-##           colors=brewer.pal(8, "Dark2"))
-## wordcloud(words = beta5$term, freq = beta5$beta, min.freq = 0,
-##           max.words=200, random.order=FALSE, rot.per=0.35,
-##           colors=brewer.pal(8, "Dark2"))
-## wordcloud(words = beta6$term, freq = beta6$beta, min.freq = 0,
-##           max.words=200, random.order=FALSE, rot.per=0.35,
-##           colors=brewer.pal(8, "Dark2"))
-
-## ####### Bash script for keyword searching documents ########
-
-## #grep searches for keywords
-
-## # -n given line numbers
-
-## # -i ignores case
-
-## # "date" here is our keyword
-
-## # * means it searches all documents in the current directory
-
-## # "cut -d : -f 1" takes the documents that contain the keyword and sends it to date_name.txt
-
-## # google grep man or cut man for more information
-
-## grep -n -i date * | cut -d : -f 1 > /home/bryony/Documents/Data\ Review/date_name.txt
+#function to find the words for each topic such that the relevance to the topic "beta" sums to approx is 0.1 for per 2000 data from CAA
+ relbeta <- function(i){
+ beta1 <- ap_topics[ap_topics$topic==i,]
+ beta1 <- beta1[order(-beta1$beta),]
+ beta1[,4] <- cumsum(beta1$beta)
+ beta1l <- beta1[beta1$V4 < 0.1,]
+ return(beta1l)
+ }
+ beta1 <- relbeta(1)
+ beta2 <- relbeta(2)
+ beta3 <- relbeta(3)
+ beta4 <- relbeta(4)
+ beta5 <- relbeta(5)
+ beta6 <- relbeta(6)
+ 
+ set.seed(1234) #ensures you get the same wordcloud each time.
+ par(mfrow = c(2, 3), mar=rep(0,4)) #arranges wordclouds in a 2x3grid
+ wordcloud(words = beta1$term, freq = beta1$beta,
+           colors=brewer.pal(8, "Dark2"))
+ wordcloud(words = beta2$term, freq = beta2$beta, min.freq = 0,
+           max.words=200, random.order=FALSE, rot.per=0.35,
+           colors=brewer.pal(8, "Dark2"))
+ wordcloud(words = beta3$term, freq = beta3$beta, min.freq = 0,
+           max.words=200, random.order=FALSE, rot.per=0.35,
+           colors=brewer.pal(8, "Dark2"))
+ wordcloud(words = beta4$term, freq = beta4$beta, min.freq = 0,
+           max.words=200, random.order=FALSE, rot.per=0.35,
+           colors=brewer.pal(8, "Dark2"))
+ wordcloud(words = beta5$term, freq = beta5$beta, min.freq = 0,
+           max.words=200, random.order=FALSE, rot.per=0.35,
+           colors=brewer.pal(8, "Dark2"))
+ wordcloud(words = beta6$term, freq = beta6$beta, min.freq = 0,
+           max.words=200, random.order=FALSE, rot.per=0.35,
+           colors=brewer.pal(8, "Dark2"))
+ 
+ 
+ #function to find the words for each topic such that the relevance to the topic "beta" sums to approx is 0.1 for CAA data
+ relbeta <- function(i){
+ beta1 <- ap_topics6[ap_topics6$topic==i,]
+ beta1 <- beta1[order(-beta1$beta),]
+ beta1[,4] <- cumsum(beta1$beta)
+ beta1l <- beta1[beta1$V4 < 0.1,]
+ return(beta1l)
+ }
+ 
+ beta1 <- relbeta(1)
+ beta2 <- relbeta(2)
+ beta3 <- relbeta(3)
+ beta4 <- relbeta(4)
+ beta5 <- relbeta(5)
+ beta6 <- relbeta(6)
+ 
+ par(mfrow = c(2, 3), mar=rep(0,4))
+ wordcloud(words = beta1$term, freq = beta1$beta,
+           colors=brewer.pal(8, "Dark2"))
+ wordcloud(words = beta2$term, freq = beta2$beta, min.freq = 0,
+           max.words=200, random.order=FALSE, rot.per=0.35,
+           colors=brewer.pal(8, "Dark2"))
+ wordcloud(words = beta3$term, freq = beta3$beta, min.freq = 0,
+           max.words=200, random.order=FALSE, rot.per=0.35,
+           colors=brewer.pal(8, "Dark2"))
+ wordcloud(words = beta4$term, freq = beta4$beta, min.freq = 0,
+         max.words=200, random.order=FALSE, rot.per=0.35,
+           colors=brewer.pal(8, "Dark2"))
+ wordcloud(words = beta5$term, freq = beta5$beta, min.freq = 0,
+           max.words=200, random.order=FALSE, rot.per=0.35,
+           colors=brewer.pal(8, "Dark2"))
+ wordcloud(words = beta6$term, freq = beta6$beta, min.freq = 0,
+           max.words=200, random.order=FALSE, rot.per=0.35,
+           colors=brewer.pal(8, "Dark2"))
 
 
-## ##### Bash script for extracting introduction#####
-
-## #sed extracts everything in a document that lies between Abstract and a blank line
-
-## #the results are then sent to abstracts.txt using ">"
-
-## #replacing abstraxt with introduction will extract the introduction too
-
-## #sed is case sensitive so it is multiple formats of a word, i.e ABSTRACT will need to be used
-
-## #if not consistently formated
-
-## sed -n "/^Abstract$/,/^$/p" * > /home/bryony/Documents/Data\ Review/abstracts.txt
-
-
-## 
+ 

@@ -308,6 +308,262 @@ length(hmasm.cdr.s.ppng) #number of documents containing all 4 key-phrases
 
 ## Probabilistic Topic Modelling
 
+<details>
+  <summary>Reading the abstracts into R</summary>
+  
+```r
+AbstractsCAAdocs <- read.csv("~/Documents/Data Review/Abstract + introcs/AbstractsCAAdocs", sep="")
+authorinfoanon <- read.csv("~/Documents/Data Review/R code/authorinfoanon.txt", header=FALSE)
+```
+</details>
+
+<details>
+  <summary>Pre-proccessing of the documents.</summary>
+  
+```r
+docs <- tm_map(docs1, tolower)   
+docs <- tm_map(docs, PlainTextDocument)
+docs <- tm_map(docs, stripWhitespace)
+docs <- tm_map(docs, PlainTextDocument)
+docs <- tm_map(docs,removePunctuation) 
+docs <- tm_map(docs, PlainTextDocument)
+docs <- tm_map(docs, removeNumbers)
+docs <- tm_map(docs, PlainTextDocument)
+docs <- tm_map(docs, removeWords, c("study", "research", "user", "use", "may", "new", "project", "information", "images", "archaeological", "can", "will", "fig", "also", "one", "figure", "two", "using", "used","possible", "different", "site")) 
+docs <- tm_map(docs, PlainTextDocument)
+docs <- tm_map(docs, removeWords, c("archaeology"))
+
+docs <- tm_map(docs, PlainTextDocument)
+docs <- tm_map(docs, removeWords, c("data"))
+docs <- tm_map(docs, PlainTextDocument)
+#next step can be used to stem documents but this didn't work well with this data
+#docs <- tm_map(docs, stemDocument, language = "english")  
+#docs <- tm_map(docs, PlainTextDocument)
+docs <- tm_map(docs, removeWords, stopwords("english")) 
+docs1 <- tm_map(docs, PlainTextDocument)
+
+#converts the french spelling of stratigraphy to the British version
+for (j in seq(docs1)){
+  docs1[[j]]$content <- gsub("stratigraphie", "stratigraphy", docs1[[j]]$content)
+}
+docs1 <- tm_map(docs1, PlainTextDocument)
+
+#adds title of each document so that abstracts can be checked later
+for (i in 1:length(docs1)){
+  meta(docs1[[i]])$document <- as.character(AbstractsCAAdocs$V2[i])
+}
+for (i in 1:length(docs1)){
+  meta(docs1[[i]])$id <- as.character(AbstractsCAAdocs$V2[i])
+}
+for (i in 1:length(docs1)){
+  meta(docs1[[i]])$heading <- as.character(AbstractsCAAdocs$V2[i])
+}
+for (i in 1:length(docs1)){
+  meta(docs1[[i]])$origin <- as.character(AbstractsCAAdocs$V2[i])
+}
+for (i in 1:length(docs1)){
+  meta(docs1[[i]])$desciption <- as.character(AbstractsCAAdocs$V2[i])
+}
+dtm <- DocumentTermMatrix(docs1)   
+
+#removes words that appear frequently in all documents
+term_tfidf <- tapply(dtm$v/row_sums(dtm)[dtm$i], dtm$j, mean) * log2(nDocs(dtm)/col_sums(dtm > 0))
+#change this to 0.05 for abstract and 0.005 for the full text
+dtm <- dtm[, term_tfidf >= 0.05]
+dtm <- dtm[row_sums(dtm) > 0,]
+rowTotals <- apply(dtm , 1, sum) #Find the sum of words in each Document
+dtm.new   <- dtm[rowTotals> 0, ]  
+```
+</details>
+
+<details>
+  <summary>Code for checking for optimum number of topics.</summary>
+  
+```r
+dtm.test <- dtm.new
+result <- FindTopicsNumber(
+  dtm.new,
+  topics = seq(from = 2, to = 15, by = 1),
+  metrics = c("Griffiths2004", "CaoJuan2009", "Arun2010", "Deveaud2014"),
+  method = "Gibbs",
+  control = list(seed = 77),
+  mc.cores = 2L,
+  verbose = TRUE
+)
+
+FindTopicsNumber_plot(result)
+```
+</details>
+
+<details>
+  <summary>Carrying out the topic modelling and manipulating output</summary>
+  
+```r
+#produces the model
+ap_lda <- LDA(dtm.new, k = 6, control = list(seed = 1234))
+#extracts a data frame for with the words and their beta values
+ap_topics <- tidy(ap_lda, matrix = "beta")
+
+#gives top 10 beta terms
+ap_top_terms <- ap_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta) %>%
+  mutate(order = row_number())
 
 
+#extracts all keywords grouped by topic
+ap_beta_terms <- ap_topics %>%
+  group_by(topic) %>%
+# top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta) %>%
+  mutate(order = row_number())
+  
+#can be used to plot top 10 words by beta value, commented out as not used  
+#ap_top_terms %>%
+#  mutate(term = reorder(term, beta)) %>%
+#  ggplot(aes(-order, beta, fill = factor(topic))) +
+#  geom_col(show.legend = FALSE) +
+#  facet_wrap(~ topic, scales = "free") +
+#  scale_x_continuous(
+#  labels = ap_top_terms$term,
+#  breaks = -ap_top_terms$order) +
+#  coord_flip()
+  
+#extracts the the top topic for each doc
+topics<- topics(ap_lda)
+topics_1 <- tidy(ap_lda, matrix = "gamma") 
+topic_top_docs <- topics_1 %>%
+  group_by(document) %>%
+  top_n(1, gamma) %>%
+  ungroup() %>%
+  arrange(document, -gamma) %>%
+  mutate(order = row_number())
+  
+#adds the year and author from my dataframe
+topicdf <- data.frame(topics, AbstractsCAAdocs$V4)
 
+
+#orders topics by year
+topicsbyyear <- cbind(c(rep(1, 33), rep(2, 33), rep(3, 33), rep(4, 33), rep(5, 33), rep(6, 33)), rep(0, 198), rep(unique(topicdf[,2]), 6))
+   for (x in 1:198){
+     topicsbyyear[x, 2] <- sum(topicdf[,1] == topicsbyyear[x,1] & topicdf[,2] == topicsbyyear[x,3])
+     x <- x + 1
+   }
+   
+#adds two blank columns
+topicsbyyear <- cbind(topicsbyyear, rep(0, 198), rep(0, 198))
+topicsbyyear <- as.data.frame(topicsbyyear)
+
+#making the proportions of topics per year 
+for (i in 1:198){
+ prop <- sum(topicsbyyear$V2[topicsbyyear$V3 == topicsbyyear$V3[i]])
+ topicsbyyear$V4[i] <- prop
+}
+topicsbyyear$V2 <- topicsbyyear$V2/topicsbyyear$V4
+
+
+for (i in 1:198){
+ prop <- sum(topicsbyyear6$V2[topicsbyyear6$V3 == topicsbyyear6$V3[i]])
+ topicsbyyear6$V4[i] <- prop
+}
+topicsbyyear6$V2 <- topicsbyyear6$V2/topicsbyyear6$V4
+
+# calculates number of unique authors per year, commented out as uniteresting result
+# #total number of authors
+#for (x in 1:198){
+#   docstemp <- row.names(topicdf[topicdf[,1] == topicsbyyear[x,1] & topicdf[,2] == topicsbyyear[x,3],])
+#   authortemp <- c()
+#  for (j in 1:length(docstemp)){
+#    z <- authorinfoanon[authorinfoanon$V4 == as.character(docstemp[j]), c(5:16)]
+#    z <- unique(as.vector(unlist(z)))
+#    z <- z[!is.na(z)]
+#    authortemp <- c(authortemp, z)
+# }
+#   topicsbyyear$V5[x] <- length(authortemp)
+#   x <- x + 1
+#}
+#  for (i in 1:198){
+#   prop <- sum(topicsbyyear$V2[topicsbyyear$V3 == topicsbyyear$V3[i]])
+#   topicsbyyear$V4[i] <- prop
+ #}
+
+# topicsbyyear$V2 <- topicsbyyear$V2/topicsbyyear$V4#plot for the number of documents per topic over the years
+
+
+#getting the proportions for the number of authors
+# for (i in 1:198){
+#   prop <- sum(topicsbyyear$V5[topicsbyyear$V3 == topicsbyyear$V3[i]])
+#   topicsbyyear$V6[i] <- prop
+# }
+
+# topicsbyyear$V5 <- topicsbyyear$V5/topicsbyyear$V6
+
+ #plotting stacked bar charts for the number of unique authors per topic
+# ggplot() + geom_bar(aes(y = V5, x = V3, fill = factor(V1)), #data = topicsbyyear, stat="identity")
+  
+```
+</details>
+
+<details>
+  <summary>Producing plots based on topic modelling.</summary>
+  
+```r
+g1 <-  ggplot() + geom_bar(aes(y = V2, x = V3), data = topicsbyyear[topicsbyyear$V1 == 1,], stat = "identity", fill =  "#D55E00") + xlab("Site database mangement \n & modelling artefacts") + ylab("") + ylim(0,0.6)
+g2 <-  ggplot() + geom_bar(aes(y = V2, x = V3), data = topicsbyyear[topicsbyyear$V1 == 2,], stat = "identity", fill =  "#F0E442") + xlab("Statistical methods & software") + ylab("") + ylim(0,0.6)
+g3 <-   ggplot() + geom_bar(aes(y = V2, x = V3), data = topicsbyyear[topicsbyyear$V1 == 3,], stat = "identity", fill = "#009E73") + xlab("GIS & coding/computer software") + ylab("Proportion of papers \n on the topic") + ylim(0,0.6)
+g4 <-  ggplot() + geom_bar(aes(y = V2, x = V3), data = topicsbyyear[topicsbyyear$V1 == 4,], stat = "identity", fill = "#56B4E9") + xlab("GIS and spatial data") + ylab("") + ylim(0,0.6)
+g5 <-  ggplot() + geom_bar(aes(y = V2, x = V3), data = topicsbyyear[topicsbyyear$V1 == 5,], stat = "identity", fill = "#E69F00") + xlab("Education & publication") + ylab("") + ylim(0,0.6)
+g6 <-  ggplot() + geom_bar(aes(y = V2, x = V3), data = topicsbyyear[topicsbyyear$V1 == 6,], stat = "identity", fill = "#FB6542") + xlab("Modelling of physical \n & temporal relationships") + ylab("") + ylim(0,0.6)
+
+ #arranges plots in a 6x1 grid
+grid.arrange(g1, g2, g3 ,g4, g5, g6, nrow = 3)  
+
+```
+</details>
+
+
+<details>
+  <summary>Code for producing word clouds</summary>
+  
+```r
+#function to find the words for each topic such that the relevance to the topic "beta" sums to approx is 0.1 for per 2000 data from CAA
+ relbeta <- function(i){
+ beta1 <- ap_topics[ap_topics$topic==i,]
+ beta1 <- beta1[order(-beta1$beta),]
+ beta1[,4] <- cumsum(beta1$beta)
+ beta1l <- beta1[beta1$V4 < 0.1,]
+ return(beta1l)
+ }
+ beta1 <- relbeta(1)
+ beta2 <- relbeta(2)
+ beta3 <- relbeta(3)
+ beta4 <- relbeta(4)
+ beta5 <- relbeta(5)
+ beta6 <- relbeta(6)
+ 
+ set.seed(1234) #ensures you get the same wordcloud each time.
+ par(mfrow = c(2, 3), mar=rep(0,4)) #arranges wordclouds in a 2x3grid
+ wordcloud(words = beta1$term, freq = beta1$beta,
+           colors=brewer.pal(8, "Dark2"))
+ wordcloud(words = beta2$term, freq = beta2$beta, min.freq = 0,
+           max.words=200, random.order=FALSE, rot.per=0.35,
+           colors=brewer.pal(8, "Dark2"))
+ wordcloud(words = beta3$term, freq = beta3$beta, min.freq = 0,
+           max.words=200, random.order=FALSE, rot.per=0.35,
+           colors=brewer.pal(8, "Dark2"))
+ wordcloud(words = beta4$term, freq = beta4$beta, min.freq = 0,
+           max.words=200, random.order=FALSE, rot.per=0.35,
+           colors=brewer.pal(8, "Dark2"))
+ wordcloud(words = beta5$term, freq = beta5$beta, min.freq = 0,
+           max.words=200, random.order=FALSE, rot.per=0.35,
+           colors=brewer.pal(8, "Dark2"))
+ wordcloud(words = beta6$term, freq = beta6$beta, min.freq = 0,
+           max.words=200, random.order=FALSE, rot.per=0.35,
+           colors=brewer.pal(8, "Dark2"))
+ 
+
+```
+</details>
